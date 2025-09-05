@@ -42,23 +42,15 @@ class EnhancedKeywords(BaseModel):
     """Enhanced keywords with synonyms and related terms."""
     synonyms: List[str] = Field(
         description="Terms with the same meaning with keyword",
-        min_items=3,
-        max_items=6,
     )
     related_terms: List[str] = Field(
         description="Closely related technical concepts for keyword",
-        min_items=3,
-        max_items=6,
     )
     patent_terminology: List[str] = Field(
         description="Formal patent language and standard industry terms for keyword",
-        min_items=3,
-        max_items=6,
     )
     technical_variations: List[str] = Field(
         description="Different ways to express the same concepts for keyword",
-        min_items=3,
-        max_items=6,
     )
 
 
