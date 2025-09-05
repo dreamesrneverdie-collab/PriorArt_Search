@@ -2,6 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 
 def get_synonyms_context(word):
+    word = word.replace(" ","-")
+    print(f"Running get_synonyms_context: {word}")
     url = f"https://www.thesaurus.com/browse/{word}"
     headers = {
         "User-Agent": "Mozilla/5.0"
@@ -9,8 +11,8 @@ def get_synonyms_context(word):
     response = requests.get(url, headers=headers)
 
     if response.status_code != 200:
-        print("Không truy cập được trang!")
-        return []
+        print("Không có từ vựng trong thesaurus.com!")
+        return ""
 
     soup = BeautifulSoup(response.text, "html.parser")
 
