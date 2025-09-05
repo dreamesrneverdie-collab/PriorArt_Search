@@ -1,8 +1,9 @@
 """Keyword Generation Node - Generates seed keywords using structured output."""
 
 from typing import Dict, Any
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessage
 from langchain_core.language_models import BaseChatModel
+import json
 
 from ..state import PatentSearchState
 from ..schemas import SeedKeywords, ConceptMatrix
@@ -10,6 +11,7 @@ from ..utils.prompts import KEYWORD_GENERATION_PROMPT
 
 
 def keyword_generation_node(state: PatentSearchState, llm: BaseChatModel) -> Dict[str, Any]:
+    print("\U0001f50d Running keyword_generation_node...")
     """
     Generate seed keywords from concept matrix using structured output.
     
@@ -38,7 +40,7 @@ def keyword_generation_node(state: PatentSearchState, llm: BaseChatModel) -> Dic
             SystemMessage(content=KEYWORD_GENERATION_PROMPT + """
 
 You MUST respond by calling the SeedKeywords tool with the generated keywords.
-Generate 3-10 high-quality search keywords for each category based on the concept matrix.
+Generate exactly 3-6 high-quality search keywords for each category based on the concept matrix.
 Focus on technical terminology that would appear in patent documents.
 
 Guidelines:
@@ -52,7 +54,7 @@ Concept Matrix:
 {concept_text}
 
 Generate seed keywords for patent search based on these extracted concepts.
-Each category should have 3-10 relevant search terms.
+Each category should have 3-6 relevant search terms.
 """)
         ]
         
@@ -60,18 +62,18 @@ Each category should have 3-10 relevant search terms.
         response = model.invoke(messages)
 
         seed_keywords = response
-
+        print(f"Seed Keywords: {seed_keywords}")
         return {
             **state,
             "seed_keywords": seed_keywords,
             "messages": state.get("messages", []) + [
-                HumanMessage(content="Generating search keywords from concepts"),
-                response,
+                AIMessage(content=f"{seed_keywords}")
             ]
         }
         
     except Exception as e:
         error_msg = f"Error in keyword generation: {str(e)}"
+        print(error_msg)
         # Fallback keyword generation
         concept_matrix = state.get("concept_matrix")
         fallback_keywords = _fallback_keyword_generation(concept_matrix)
@@ -102,25 +104,9 @@ def _fallback_keyword_generation(concept_matrix: ConceptMatrix) -> SeedKeywords:
     Returns:
         Basic SeedKeywords based on concepts
     """
-    problem_keywords = []
-    object_keywords = []
-    field_keywords = []
-    
-    # Generate keywords from problem/purpose concepts
-    for concept in concept_matrix.problem_purpose:
-        problem_keywords.append([f"fallback_keyword_{concept}"]*3)
-    
-    # Generate keywords from object/system concepts
-    for concept in concept_matrix.object_system:
-        object_keywords.append([f"fallback_keyword_{concept}"]*3)
-
-    # Generate keywords from environment/field concepts
-    for concept in concept_matrix.environment_field:
-        field_keywords.append([f"fallback_keyword_{concept}"]*3)
     
     return SeedKeywords(
-        problem_purpose=problem_keywords[:10],
-        object_system=object_keywords[:10],
-        environment_field=field_keywords[:10]
+        problem_purpose=["fallback_keyword_problem_purpose"]*3,
+        object_system=["fallback_keyword_object_system"]*3,
+        environment_field=["fallback_keyword_environment_field"]*3
     )
-
