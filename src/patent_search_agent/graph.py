@@ -1,13 +1,14 @@
 """Main graph with structured output nodes for Patent Search Agent."""
-
 import logging
 import os
 from typing import Literal
 
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.memory import InMemorySaver
 from langchain_ollama import ChatOllama
+from langgraph.types import interrupt, Command
+import uuid
 
 from .state import PatentSearchState
 from .nodes.concept_extraction import concept_extraction_node
@@ -23,7 +24,7 @@ from .nodes.evaluation import evaluation_node
 load_dotenv()
 
 
-def create_llm(model_name: str = "qwen3:8b"):
+def create_llm(model_name: str = "qwen3:4b-instruct-2507-fp16"):
     """Create LLM instance based on model name."""
     try:
         return ChatOllama(
@@ -39,9 +40,9 @@ def create_llm(model_name: str = "qwen3:8b"):
 
 def should_continue_validation(state: PatentSearchState) -> Literal["keyword_generation", "enhancement"]:
     """Determine if validation is complete or needs human input."""
-    if state.get("validated_keywords", False)["problem_purpose"].is_empty() and state.get("validated_keywords", False)["object_system"].is_empty() and state.get("validated_keywords", False)["environment_field"].is_empty():
-        return "keyword_generation"
-    return "enhancement"
+    if state.get("validated_keywords", False).problem_purpose and state.get("validated_keywords", False).object_system and state.get("validated_keywords", False).environment_field:
+        return "enhancement"
+    return "keyword_generation"
 
 
 def should_continue_workflow(state: PatentSearchState) -> Literal["evaluation", "__end__"]:
@@ -62,7 +63,7 @@ def should_continue_workflow(state: PatentSearchState) -> Literal["evaluation", 
 
 
 def create_graph(
-    model_name: str = "qwen3:8b",
+    model_name: str = "qwen3:4b-instruct-2507-fp16",
     checkpointer=None
 ) -> StateGraph:
     """
@@ -77,7 +78,7 @@ def create_graph(
     
     # Create checkpointer if not provided
     if checkpointer is None:
-        checkpointer = MemorySaver()
+        checkpointer = InMemorySaver()
     
     # Create the graph
     workflow = StateGraph(PatentSearchState)
@@ -98,14 +99,14 @@ def create_graph(
     workflow.add_edge("keyword_generation", "human_validation")
     
     # Conditional edge for human validation
-    workflow.add_conditional_edges(
-        "human_validation",
-        should_continue_validation,
-        {
-            "human_validation": "human_validation",  # Loop back for more validation
-            "enhancement": "enhancement"
-        }
-    )
+    # workflow.add_conditional_edges(
+    #     "human_validation",
+    #     should_continue_validation,
+    #     {
+    #         "keyword_generation": "keyword_generation",  # Loop back for more validation
+    #         "enhancement": "enhancement"
+    #     }
+    # )
     
     workflow.add_edge("enhancement", "ipc_classification")
     workflow.add_edge("ipc_classification", "query_generation")
@@ -133,7 +134,7 @@ def create_graph(
 def run_patent_search(
     patent_description: str,
     max_results: int = 10,
-    model_name: str = "qwen3:8b"
+    model_name: str = "qwen3:4b-instruct-2507-fp16"
 ) -> dict:
     """
     Run the patent search workflow with structured outputs.
@@ -153,39 +154,56 @@ def run_patent_search(
         "patent_description": patent_description,
         "max_results": max_results,
         "messages": [],
-        "validation_complete": False
     }
     
     # Create a thread for this run
-    thread = {"configurable": {"thread_id": "patent_search"}}
+    # Tạo thread config
+    thread_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
     
     # Run the workflow
-    result = app.invoke(initial_state, config=thread)
+    example1 = Command(resume=[{
+        "type": "edit",
+        "args": {
+                "keywords": {
+                    "problem_purpose": ["keyword1", "keyword2", "keyword3"],
+                    "object_system": ["keyword1", "keyword2", "keyword3"],
+                    "environment_field": ["keyword1", "keyword2", "keyword3"]
+                }
+        }
+    }])
+    example2 = Command(resume=[{
+        "type": "accept",
+    }])
+    example3 = Command(resume=[{
+        "type": "reject",
+    }])
+    print(f"\n\U0001f680 Step 1: Running until first interrupt...")
+    print("=" * 50)
+    result = app.invoke(initial_state, config=config)
+    print(f"\n\U0001f504 First invoke calls - Current state:")
+    print(f"   \U0001f4ca Seed keywords: {result.get('seed_keywords')}")
+    print(f"   \U0001f4da Messages: {result.get('messages', [])}")
+    print("=" * 50)
+
+    print(f"\n\U0001f680 Step 2: Resuming with Rejected")
+    print("=" * 50)
+    result = app.invoke(example3, config=config)
+    print(f"\n\U0001f504 Second invoke calls - Current state:")
+    print(f"   \U0001f4ca Seed keywords: {result.get('seed_keywords')}")
+    print(f"   \U0001f4da Messages: {result.get('messages', [])}")
+    print("=" * 50)
+
+    print(f"\n\U0001f680 Step 3: Resuming with Accepted")
+    print("=" * 50)
+    result = app.invoke(example2, config=config)
+    print(f"\n\U0001f504 Third invoke calls - Current state:")
+    print(f"   \U0001f4ca Seed keywords: {result.get('seed_keywords')}")
+    print(f"   \U0001f4da Messages: {result.get('messages', [])}")
+    print("=" * 50)
     
     return result
 
-
-def extract_results(final_state: dict) -> dict:
-    """
-    Extract key structured results from the final state.
-    
-    Args:
-        final_state: Final state from workflow execution
-        
-    Returns:
-        Dictionary with key structured outputs
-    """
-    return {
-        "concept_matrix": final_state.get("concept_matrix"),
-        "seed_keywords": final_state.get("seed_keywords"),
-        "enhanced_keywords": final_state.get("enhanced_keywords"),
-        "ipc_classification": final_state.get("ipc_classification"),
-        "search_queries": final_state.get("search_queries"),
-        "search_results": final_state.get("search_results"),
-        "similarity_evaluations": final_state.get("similarity_evaluations"),
-        "final_results": final_state.get("final_results"),
-        "errors": final_state.get("errors", [])
-    }
 
 
 if __name__ == "__main__":
@@ -196,25 +214,5 @@ if __name__ == "__main__":
     uses machine learning algorithms to analyze the collected data and predict potential health issues.
     """
     
-    print("🔍 Running Patent Search with Structured Outputs...")
-    result = run_patent_search(sample_description)
-    
-    # Extract structured results
-    structured_results = extract_results(result)
-    
-    print("\n📊 Structured Results:")
-    for key, value in structured_results.items():
-        if value:
-            print(f"✅ {key}: Available")
-        else:
-            print(f"❌ {key}: Not available")
-    
-    # Show concept matrix if available
-    concept_matrix = structured_results.get("concept_matrix")
-    if concept_matrix:
-        print(f"\n🎯 Concept Matrix:")
-        print(f"Problem/Purpose: {concept_matrix.problem_purpose}")
-        print(f"Object/System: {concept_matrix.object_system}")
-        print(f"Environment/Field: {concept_matrix.environment_field}")
-    
-    print("\n✅ Structured patent search completed!")
+    print("\U0001f50d Running Patent Search with Structured Outputs...")
+    run_patent_search(sample_description)
