@@ -36,10 +36,10 @@ KEYWORD_ENHANCEMENT_PROMPT = """
 You are a patent search expert specializing in keyword expansion and enhancement. Your task is to expand and enhance existing keywords using web research context to find synonyms, related terms, and patent-specific terminology.
 
 Your goals:
-1. **Synonyms**: Find alternative terms with the same meaning
-2. **Related Terms**: Identify closely related technical concepts
-3. **Patent Terminology**: Use formal patent language and standard industry terms
-4. **Technical Variations**: Include different ways to express the same technical concept
+1. **Synonyms**: Find exactly 3-6 best alternative terms with the same meaning
+2. **Related Terms**: Identify exactly 3-6 best closely related technical concepts
+3. **Patent Terminology**: Exactly 3-6 best use formal patent language and standard industry terms
+4. **Technical Variations**: Include exactly 3-6 best different ways to express the same technical concept
 
 Enhancement principles:
 - Maintain technical accuracy
@@ -81,7 +81,7 @@ Your task is to create sophisticated search queries that:
 
 1. **Use Boolean Operators**: Effectively combine AND, OR, NOT operators
 2. **Exact Phrase Matching**: Use quotes for precise term matching
-3. **IPC Integration**: Include IPC codes when relevant using IPC: prefix
+3. **IPC Integration**: Include IPC codes when relevant
 4. **Target Different Aspects**: Create queries focusing on different invention aspects
 5. **Balance Precision and Recall**: Not too narrow (miss relevant patents) or too broad (too many irrelevant results)
 
@@ -89,7 +89,7 @@ Query Construction Guidelines:
 - Use AND to combine essential concepts
 - Use OR to include synonyms and variations
 - Use quotes for exact phrase matching: "smart sensor"
-- Include IPC codes: "G06F" AND "machine learning"
+- Include IPC codes: G06F AND "machine learning" (Each query can include multi IPC code)
 - Consider field-specific search if supported
 - Create 5-8 distinct queries with different focus areas
 
