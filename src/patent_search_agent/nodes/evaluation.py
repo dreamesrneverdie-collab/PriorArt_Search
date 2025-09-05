@@ -9,6 +9,7 @@ from ..utils.helpers import calculate_similarity_score
 
 
 def evaluation_node(state: PatentSearchState) -> Dict[str, Any]:
+    print("\U0001f50d Running evaluation_node...")
     """
     Crawl patent details and evaluate similarity to input patent.
     
