@@ -13,6 +13,7 @@ from ..utils.prompts import PATENT_SUMMARY_PROMPT
 
 
 def ipc_classification_node(state: PatentSearchState, llm: BaseChatModel) -> Dict[str, Any]:
+    print("\U0001f50d Running ipc_classification_node...")
     """
     Get IPC (International Patent Classification) codes using structured output.
     
@@ -35,9 +36,10 @@ def ipc_classification_node(state: PatentSearchState, llm: BaseChatModel) -> Dic
     # Step 2: Get IPC classification using the summary
     ipc_codes = get_ipc_classification(patent_summary)
 
+    print(ipc_codes)
     return {
         **state,
-        "ipc_classification": ipc_codes,
+        "ipc_codes": ipc_codes,
         "messages": state.get("messages", []) + [
             HumanMessage(content="Generated IPC classification")
         ]
