@@ -2,7 +2,7 @@
 
 import logging
 from typing import Dict, Any
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessage
 from langchain_core.language_models import BaseChatModel
 
 from ..state import PatentSearchState
@@ -11,6 +11,7 @@ from ..utils.prompts import CONCEPT_EXTRACTION_PROMPT
 
 
 def concept_extraction_node(state: PatentSearchState, llm: BaseChatModel) -> Dict[str, Any]:
+    print("\U0001f50d Running concept_extraction_node...")
     """
     Extract concept matrix from patent description using structured output.
     
@@ -45,12 +46,13 @@ Each category should have 2-7 specific, technical concepts.
         ]
             # Get LLM response with forced tool calling
         concept_matrix = model.invoke(messages)
+        print(concept_matrix)
+
         return {
             **state,
             "concept_matrix": concept_matrix,
             "messages": state.get("messages", []) + [
-                HumanMessage(content="Extracting concepts from patent description"),
-                concept_matrix,
+                AIMessage(content=concept_matrix)
             ]
         }
         
@@ -91,9 +93,9 @@ def _fallback_concept_extraction(patent_description: str) -> ConceptMatrix:
         environment_field = ["technology_field"]
     
     return ConceptMatrix(
-        problem_purpose=problem_purpose[:7],  # Max 7 items
-        object_system=object_system[:7],
-        environment_field=environment_field[:7]
+        problem_purpose=problem_purpose[0],
+        object_system=object_system[0],
+        environment_field=environment_field[0]
     )
 
 
