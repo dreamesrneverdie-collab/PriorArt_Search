@@ -38,30 +38,6 @@ def create_llm(model_name: str = "qwen3:4b-instruct-2507-fp16"):
         logging.error(f"Error creating LLM: {e}")
 
 
-def should_continue_validation(state: PatentSearchState) -> Literal["keyword_generation", "enhancement"]:
-    """Determine if validation is complete or needs human input."""
-    if state.get("validated_keywords", False).problem_purpose and state.get("validated_keywords", False).object_system and state.get("validated_keywords", False).environment_field:
-        return "enhancement"
-    return "keyword_generation"
-
-
-def should_continue_workflow(state: PatentSearchState) -> Literal["evaluation", "__end__"]:
-    """Determine if workflow should continue or end."""
-    # Check both old and new search results formats
-    search_results = state.get("search_results", [])
-    search_results = state.get("search_results")
-    
-    has_results = False
-    if search_results:
-        has_results = len(search_results) > 0
-    elif search_results:
-        has_results = search_results.total_found > 0
-    
-    if has_results:
-        return "evaluation"
-    return "__end__"
-
-
 def create_graph(
     model_name: str = "qwen3:4b-instruct-2507-fp16",
     checkpointer=None
@@ -98,29 +74,8 @@ def create_graph(
     workflow.add_edge("concept_extraction", "keyword_generation")
     workflow.add_edge("keyword_generation", "human_validation")
     
-    # Conditional edge for human validation
-    # workflow.add_conditional_edges(
-    #     "human_validation",
-    #     should_continue_validation,
-    #     {
-    #         "keyword_generation": "keyword_generation",  # Loop back for more validation
-    #         "enhancement": "enhancement"
-    #     }
-    # )
-    
     workflow.add_edge("enhancement", "ipc_classification")
     workflow.add_edge("ipc_classification", "query_generation")
-    # workflow.add_edge("query_generation", "patent_search")
-    
-    # Conditional edge for final results
-    # workflow.add_conditional_edges(
-    #     "patent_search",
-    #     should_continue_workflow,
-    #     {
-    #         "evaluation": "evaluation",
-    #         "__end__": END
-    #     }
-    # )
     
     # workflow.add_edge("evaluation", END)
     workflow.add_edge("query_generation", END)
