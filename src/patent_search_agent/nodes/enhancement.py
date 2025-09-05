@@ -2,17 +2,17 @@
 
 import logging
 from typing import Dict, Any, List
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.language_models import BaseChatModel
 
 from ..state import PatentSearchState
-from ..tools.tavily_search import search_web_for_keywords
 from ..tools.bs4_crawler import get_synonyms_context
 from ..utils.prompts import KEYWORD_ENHANCEMENT_PROMPT
 from ..schemas import EnhancedKeywords
 
 
 def enhancement_node(state: PatentSearchState, llm: BaseChatModel) -> Dict[str, Any]:
+    print("\U0001f50d Running enhancement_node...")
     """
     Enhance keywords by finding synonyms and related terms using structured output.
     
@@ -25,6 +25,7 @@ def enhancement_node(state: PatentSearchState, llm: BaseChatModel) -> Dict[str, 
     """
     try:
         validated_keywords = state.get("validated_keywords", {})
+
         
         # Create structured LLM
         structured_llm = llm.with_structured_output(EnhancedKeywords)
@@ -34,9 +35,9 @@ def enhancement_node(state: PatentSearchState, llm: BaseChatModel) -> Dict[str, 
         sources_used = []
         
         enhanced_keywords = {
-            "problem_purpose": [validated_keywords.get("problem_purpose", [])],
-            "object_system": [validated_keywords.get("object_system", [])],
-            "environment_field": [validated_keywords.get("environment_field", [])]
+            "problem_purpose": validated_keywords.get("problem_purpose", []).copy(),
+            "object_system": validated_keywords.get("object_system", []).copy(),
+            "environment_field": validated_keywords.get("environment_field", []).copy()
         }
 
         for category, keywords in validated_keywords.items():
@@ -48,16 +49,17 @@ def enhancement_node(state: PatentSearchState, llm: BaseChatModel) -> Dict[str, 
                     SystemMessage(content=KEYWORD_ENHANCEMENT_PROMPT),
                     HumanMessage(content=f"""
 Concept matrix:
-{_format_concepts_for_enhancement(state.get("concept_matrix", {}))}
+{_format_concepts_for_enhancement(state.get("concept_matrix", {}).dict())}
 
 Seed Keyword belong to {category} extracted from concept matrix:
-{keyword}
-
-Enhance this keyword with synonyms and related terms optimized for patent searches using web search context.
-Ensure enhanced keywords maintain technical accuracy and searchability.
+{keyword}  
 
 Web Search Context for Synonyms:
 {search_context}
+
+
+Enhance this keyword with synonyms and related terms optimized for patent searches using web search context.
+Ensure enhanced keywords maintain technical accuracy and searchability. 
 """)
                 ]
                 # Get structured enhancement
@@ -66,10 +68,13 @@ Web Search Context for Synonyms:
                 enhanced_keywords[category].extend(response.related_terms)
                 enhanced_keywords[category].extend(response.patent_terminology)
                 enhanced_keywords[category].extend(response.technical_variations)
-        
+
+                msg = state.get("messages", []) + [AIMessage(content=f"{response}")]
+        print(enhanced_keywords)
         return {
             **state,
             "enhanced_keywords": enhanced_keywords,
+            "messages": msg
         }
         
     except Exception as e:
@@ -78,7 +83,7 @@ Web Search Context for Synonyms:
         logging.warning("Falling back to original keywords without enhancement.")
         
         # Fallback enhancement
-        fallback_result = _fallback_enhancement(validated_keywords)
+        fallback_result = _fallback_enhancement(state.get("validated_keywords", {}))
 
         return {
             **state,
