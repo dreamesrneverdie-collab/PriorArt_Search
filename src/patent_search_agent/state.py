@@ -6,9 +6,7 @@ from typing_extensions import TypedDict
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
 from .schemas import (
-    ConceptMatrix, SeedKeywords, EnhancedKeywords, 
-    IPCClassification, SearchQueries, PatentSearchResults,
-    SimilarityEvaluation, FinalResults
+    ConceptMatrix, SeedKeywords, EnhancedKeywords, SearchQueries
 )
 
 
@@ -35,17 +33,17 @@ class PatentSearchState(TypedDict):
     enhanced_keywords: Optional[SeedKeywords]
     
     # Node 5: IPC Classification - Structured Output
-    ipc_classification: Optional[str]
+    ipc_codes: Optional[str]
     
     # Node 6: Query Generation - Structured Output
     search_queries: Optional[SearchQueries]
     
     # Node 7: Patent Search - Structured Output
-    search_results: Optional[PatentSearchResults]
+    # search_results: Optional[PatentSearchResults]
     
-    # Node 8: Crawl and Evaluation - Structured Output
-    similarity_evaluations: Optional[List[SimilarityEvaluation]]
-    final_results: Optional[FinalResults]
+    # # Node 8: Crawl and Evaluation - Structured Output
+    # similarity_evaluations: Optional[List[SimilarityEvaluation]]
+    # final_results: Optional[FinalResults]
     
     # Error handling
     errors: Optional[List[str]]
