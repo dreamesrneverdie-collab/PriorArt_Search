@@ -8,6 +8,7 @@ from ..tools.google_patents import search_google_patents
 
 
 def patent_search_node(state: PatentSearchState) -> Dict[str, Any]:
+    print("\U0001f50d Running patent_search_node...")
     """
     Search for patents using generated queries on Google Patents.
     
