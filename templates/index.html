@@ -178,7 +178,14 @@ document.getElementById('searchForm').addEventListener('submit', async function(
         const baseUrl = getBaseUrl();
         const response = await axios.post(`${baseUrl}/start_search`, data);
         
+        if (!response.data || !response.data.status) {
+            throw new Error('Invalid response from server');
+        }
+
         if (response.data.status === 'waiting_validation') {
+            if (!response.data.thread_id || !response.data.seed_keywords) {
+                throw new Error('Invalid response data: missing thread_id or seed_keywords');
+            }
             currentThreadId = response.data.thread_id;
             currentKeywords = response.data.seed_keywords;
             showKeywordValidation(response.data.seed_keywords);
@@ -282,11 +289,20 @@ async function validateKeywords(action) {
         const baseUrl = getBaseUrl();
         const response = await axios.post(`${baseUrl}/validate_keywords`, data);
         
+        if (!response.data) {
+            throw new Error('No response data received');
+        }
+
         if (response.data.status === 'waiting_validation') {
+            if (!response.data.seed_keywords) {
+                throw new Error('No keywords received from server');
+            }
             currentKeywords = response.data.seed_keywords;
             showKeywordValidation(response.data.seed_keywords);
         } else if (response.data.status === 'complete') {
             showSearchComplete();
+        } else {
+            throw new Error('Invalid response status: ' + response.data.status);
         }
         
     } catch (error) {
