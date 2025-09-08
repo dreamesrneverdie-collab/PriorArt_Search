@@ -97,18 +97,52 @@ document.getElementById('searchForm').addEventListener('submit', async function(
     document.getElementById('resultsSection').style.display = 'none';
     
     try {
+        console.log('Sending request with description:', description);
         const response = await axios.post('/start_search', {
             patent_description: description
+        }, {
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            timeout: 30000 // 30 seconds timeout
         });
         
+        console.log('Received response:', response.data);
+        
+        if (!response.data) {
+            throw new Error('Empty response from server');
+        }
+        
         if (response.data.status === 'waiting_validation') {
+            if (!response.data.thread_id || !response.data.seed_keywords) {
+                throw new Error('Invalid response format: missing thread_id or seed_keywords');
+            }
             currentThreadId = response.data.thread_id;
             currentKeywords = response.data.seed_keywords;
             showKeywords(response.data.seed_keywords);
+        } else {
+            throw new Error('Unexpected response status: ' + response.data.status);
         }
     } catch (error) {
-        console.error('Error:', error);
-        alert('Error: ' + (error.response?.data?.error || error.message));
+        console.error('Error details:', error);
+        let errorMessage = 'An error occurred while processing your request. ';
+        
+        if (error.response) {
+            // Server responded with error
+            console.error('Server error response:', error.response);
+            errorMessage += error.response.data?.error || 
+                          `Server error (${error.response.status}): ${error.response.data}`;
+        } else if (error.request) {
+            // Request was made but no response
+            console.error('No response received:', error.request);
+            errorMessage += 'No response received from server. Please try again.';
+        } else {
+            // Error in request setup
+            console.error('Request setup error:', error.message);
+            errorMessage += error.message;
+        }
+        
+        alert(errorMessage);
     } finally {
         document.getElementById('loadingSection').style.display = 'none';
     }

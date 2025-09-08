@@ -4,6 +4,7 @@ import os
 import uuid
 import traceback
 from flask import Flask, render_template, request, jsonify, session
+from flask_cors import CORS
 from src.patent_search_agent.graph import create_graph
 from langgraph.types import Command
 
@@ -11,7 +12,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+CORS(app)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-123')
+
+# Configure CORS headers
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # Global variable to store the graph instance
 graph_app = None
@@ -22,11 +32,13 @@ def get_graph():
     global graph_app
     if graph_app is None:
         try:
+            logger.info("Creating new graph instance...")
             graph_app = create_graph()
             logger.info("Graph instance created successfully")
         except Exception as e:
             logger.error(f"Error creating graph: {e}")
-            raise
+            logger.error(traceback.format_exc())
+            raise Exception(f"Failed to create graph: {str(e)}")
     return graph_app
 
 # Add request logging middleware
@@ -69,17 +81,25 @@ def index():
 def start_search():
     """Start a new patent search workflow."""
     try:
+        logger.info("Received start_search request")
+        
         if not request.is_json:
+            logger.error("Request is not JSON")
             return jsonify({'error': 'Request must be JSON'}), 400
             
         data = request.get_json()
+        logger.info(f"Received data: {data}")
+        
         patent_description = data.get('patent_description', '').strip()
+        logger.info(f"Patent description length: {len(patent_description)}")
         
         if not patent_description:
+            logger.error("Empty patent description")
             return jsonify({'error': 'Patent description is required'}), 400
         
         # Create new session
         thread_id = str(uuid.uuid4())
+        logger.info(f"Created thread ID: {thread_id}")
         
         # Initialize workflow
         initial_state = {
@@ -90,11 +110,20 @@ def start_search():
         
         config = {"configurable": {"thread_id": thread_id}}
         
-        # Get graph instance
-        app_instance = get_graph()
-        
-        # Run until first interrupt
-        result = app_instance.invoke(initial_state, config=config)
+        try:
+            # Get graph instance
+            logger.info("Getting graph instance")
+            app_instance = get_graph()
+            
+            # Run until first interrupt
+            logger.info("Invoking graph with initial state")
+            result = app_instance.invoke(initial_state, config=config)
+            logger.info(f"Graph result keys: {result.keys() if result else 'None'}")
+            
+        except Exception as graph_error:
+            logger.error(f"Error in graph processing: {str(graph_error)}")
+            logger.error(traceback.format_exc())
+            return jsonify({'error': f'Graph processing error: {str(graph_error)}'}), 500
         
         # Store in active sessions
         active_sessions[thread_id] = {
@@ -103,17 +132,23 @@ def start_search():
         }
         
         if result.get('seed_keywords'):
+            logger.info("Successfully extracted keywords")
+            seed_keywords = result.get('seed_keywords')
+            if hasattr(seed_keywords, 'dict'):
+                seed_keywords = seed_keywords.dict()
             return jsonify({
                 'thread_id': thread_id,
                 'status': 'waiting_validation',
-                'seed_keywords': result.get('seed_keywords').dict(),
+                'seed_keywords': seed_keywords,
             })
         else:
+            logger.error("No keywords found in result")
             return jsonify({'error': 'Failed to extract keywords'}), 500
             
     except Exception as e:
-        logger.error(f"Error in start_search: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Unexpected error in start_search: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/validate_keywords', methods=['POST'])
 def validate_keywords():
