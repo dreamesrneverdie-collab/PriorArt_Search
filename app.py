@@ -162,7 +162,7 @@ def start_search():
             return jsonify({
                 'thread_id': thread_id,
                 'status': 'waiting_validation',
-                'seed_keywords': result.get('seed_keywords'),
+                'seed_keywords': result.get('seed_keywords').dict(),
                 'patent_description': patent_description,
                 'message': 'Please review and validate the extracted keywords.'
             })
