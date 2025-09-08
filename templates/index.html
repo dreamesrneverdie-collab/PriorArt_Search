@@ -81,6 +81,15 @@
 let currentThreadId = null;
 let currentKeywords = null;
 
+// Get base URL for API calls that works with Kubeflow proxy
+function getBaseUrl() {
+    // Get current location path
+    const path = window.location.pathname;
+    // Extract everything up to 'proxy/5000'
+    const match = path.match(/(.*\/proxy\/5000)/);
+    return match ? match[1] : '';
+}
+
 // Handle form submission
 document.getElementById('searchForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -97,8 +106,11 @@ document.getElementById('searchForm').addEventListener('submit', async function(
     document.getElementById('resultsSection').style.display = 'none';
     
     try {
+        const baseUrl = getBaseUrl();
+        console.log('Using base URL:', baseUrl);
         console.log('Sending request with description:', description);
-        const response = await axios.post('/start_search', {
+        
+        const response = await axios.post(`${baseUrl}/start_search`, {
             patent_description: description
         }, {
             headers: {
@@ -228,7 +240,8 @@ async function handleAccept() {
     document.getElementById('keywordsSection').style.display = 'none';
     
     try {
-        const response = await axios.post('/validate_keywords', {
+        const baseUrl = getBaseUrl();
+        const response = await axios.post(`${baseUrl}/validate_keywords`, {
             thread_id: currentThreadId,
             action: 'accept',
             keywords: keywords
@@ -254,7 +267,8 @@ async function handleReject() {
     document.getElementById('keywordsSection').style.display = 'none';
     
     try {
-        const response = await axios.post('/validate_keywords', {
+        const baseUrl = getBaseUrl();
+        const response = await axios.post(`${baseUrl}/validate_keywords`, {
             thread_id: currentThreadId,
             action: 'reject'
         });
