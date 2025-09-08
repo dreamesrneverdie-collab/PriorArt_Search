@@ -7,6 +7,8 @@ from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 from src.patent_search_agent.graph import create_graph
 from langgraph.types import Command
+from werkzeug.serving import WSGIRequestHandler
+WSGIRequestHandler.protocol_version = "HTTP/1.1"  # Enable keep-alive connections
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,8 +35,32 @@ def get_graph():
     if graph_app is None:
         try:
             logger.info("Creating new graph instance...")
-            graph_app = create_graph()
-            logger.info("Graph instance created successfully")
+            import signal
+            from contextlib import contextmanager
+            
+            @contextmanager
+            def timeout(seconds):
+                def handler(signum, frame):
+                    raise TimeoutError(f"Operation timed out after {seconds} seconds")
+                # Set the timeout handler
+                old_handler = signal.signal(signal.SIGALRM, handler)
+                # Set alarm
+                signal.alarm(seconds)
+                try:
+                    yield
+                finally:
+                    # Restore the old handler
+                    signal.signal(signal.SIGALRM, old_handler)
+                    # Disable alarm
+                    signal.alarm(0)
+            
+            try:
+                with timeout(30):  # 30 seconds timeout
+                    graph_app = create_graph()
+                    logger.info("Graph instance created successfully")
+            except TimeoutError as te:
+                logger.error("Graph creation timed out")
+                raise Exception("Graph initialization timed out after 30 seconds")
         except Exception as e:
             logger.error(f"Error creating graph: {e}")
             logger.error(traceback.format_exc())

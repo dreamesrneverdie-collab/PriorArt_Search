@@ -110,13 +110,42 @@ document.getElementById('searchForm').addEventListener('submit', async function(
         console.log('Using base URL:', baseUrl);
         console.log('Sending request with description:', description);
         
-        const response = await axios.post(`${baseUrl}/start_search`, {
-            patent_description: description
-        }, {
+        // Create axios instance with configuration
+        const axiosInstance = axios.create({
+            timeout: 90000, // 90 seconds timeout
+            maxRetries: 3,
+            retryDelay: 1000,
             headers: {
-                'Content-Type': 'application/json'
-            },
-            timeout: 30000 // 30 seconds timeout
+                'Content-Type': 'application/json',
+                'Connection': 'keep-alive'
+            }
+        });
+        
+        // Add retry interceptor
+        axiosInstance.interceptors.response.use(null, async error => {
+            const config = error.config;
+            
+            if (!config || !config.retries) {
+                config.retries = 0;
+            }
+            
+            if (config.retries >= config.maxRetries) {
+                return Promise.reject(error);
+            }
+            
+            config.retries += 1;
+            console.log(`Retry attempt ${config.retries}`);
+            
+            const backoff = new Promise(resolve => {
+                setTimeout(() => resolve(), config.retryDelay * config.retries);
+            });
+            
+            await backoff;
+            return axiosInstance(config);
+        });
+        
+        const response = await axiosInstance.post(`${baseUrl}/start_search`, {
+            patent_description: description
         });
         
         console.log('Received response:', response.data);
