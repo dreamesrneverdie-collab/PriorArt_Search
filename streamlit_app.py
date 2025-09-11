@@ -1,118 +1,129 @@
 import streamlit as st
-import json
-from src.patent_search_agent.graph import run_patent_search
-from langgraph.types import Command
+from src.patent_search_agent.graph import create_graph
+import uuid
+from langgraph.types import interrupt, Command
 
 st.set_page_config(
     page_title="Patent Search System",
-    page_icon="🔍",
+    page_icon="\U0001f50d",
     layout="wide"
 )
 
-def main():
-    st.title("🔍 Patent Search System")
-    
-    # Input for patent description
-    st.subheader("Enter Patent Description")
+st.title("\U0001f50d Patent Search System")
+
+def init_session_state():
+    if 'thread_id' not in st.session_state:
+        st.session_state.thread_id = str(uuid.uuid4())
+    if 'cancel_event' not in st.session_state:
+        st.session_state.cancel_event = False
+    if 'app' not in st.session_state:
+        st.session_state.app = create_graph()
+    if 'current_state' not in st.session_state:
+        st.session_state.current_state = None
+    if 'keywords_generated' not in st.session_state:
+        st.session_state.keywords_generated = False
+
+init_session_state()
+
+# Input section
+with st.container():
+    st.header("Patent Description")
     patent_description = st.text_area(
-        "Describe the patent you want to search for",
+        "Enter the patent description",
         height=200,
-        help="Enter a detailed description of the patent concept you want to search for."
+        placeholder="Enter a description of the patent you want to search for..."
     )
     
-    # Model selection
-    model_name = st.selectbox(
-        "Select Model",
-        ["qwen3:4b-instruct-2507-fp16"],
-        help="Select the model to use for the search"
-    )
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        max_results = st.number_input("Max Results", min_value=1, value=10)
     
-    # Number of results
-    max_results = st.slider(
-        "Maximum Results",
-        min_value=5,
-        max_value=50,
-        value=10,
-        help="Select the maximum number of results to return"
-    )
-    
-    # Initialize session state
-    if 'step' not in st.session_state:
-        st.session_state.step = 1
-    if 'result' not in st.session_state:
-        st.session_state.result = None
-    if 'thread_config' not in st.session_state:
-        st.session_state.thread_config = None
-    
-    # Start search button
-    if st.button("Start Search") and patent_description:
-        with st.spinner("Starting patent search..."):
-            try:
-                # Initial search
-                result = run_patent_search(
-                    patent_description=patent_description,
-                    max_results=max_results,
-                    model_name=model_name
+    if st.button("Start Search", type="primary"):
+        if patent_description:
+            # Initialize the search
+            initial_state = {
+                "patent_description": patent_description,
+                "max_results": max_results,
+                "messages": [],
+            }
+            
+            config = {"configurable": {"thread_id": st.session_state.thread_id}}
+            
+            with st.spinner("Generating keywords..."):
+                st.session_state.current_state = st.session_state.app.invoke(
+                    initial_state, 
+                    config=config
                 )
-                st.session_state.result = result
-                st.session_state.step = 2
-                
-                # Display initial keywords
-                if 'seed_keywords' in result:
-                    display_keywords(result['seed_keywords'])
-                
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
+                st.session_state.keywords_generated = True
+                st.rerun()
+
+# Display keywords and validation section
+if st.session_state.keywords_generated and st.session_state.current_state:
+    st.header("Keywords Validation")
     
-    # Display keyword validation interface if we have results
-    if st.session_state.step == 2 and st.session_state.result:
-        st.subheader("Keyword Validation")
+    seed_keywords = st.session_state.current_state.get('seed_keywords', {}).dict()
+    
+    if seed_keywords:
+        st.subheader("Generated Keywords")
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("✅ Accept Keywords"):
-                with st.spinner("Processing..."):
-                    example2 = Command(resume=[{"type": "accept"}])
-                    result = run_patent_search(
-                        patent_description=patent_description,
-                        max_results=max_results,
-                        model_name=model_name
+            # st.write("Problem/Purpose:")
+            # st.write(", ".join(seed_keywords.get('problem_purpose', [])))
+            problem_purpose = st.text_input("Problem/Purpose:", ", ".join(seed_keywords.get('problem_purpose', [])))
+            
+        with col2:
+            # st.write("Object/System:")
+            # st.write(", ".join(seed_keywords.get('object_system', [])))
+            object_system = st.text_input("Object/System:", ", ".join(seed_keywords.get('object_system', [])))
+            
+        with col3:
+            # st.write("Environment/Field:")
+            # st.write(", ".join(seed_keywords.get('environment_field', [])))
+            environment_field = st.text_input("Environment/Field:", ", ".join(seed_keywords.get('environment_field', [])))
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("Accept Keywords ✅", type="primary"):
+                with st.spinner("Processing accepted keywords..."):
+                    st.session_state.cancel_event = False
+                    resume_command = Command(resume=[{
+                        "type": "edit",
+                        "args": {
+                                "keywords": {
+                                    "problem_purpose": problem_purpose.split(", "),
+                                    "object_system": object_system.split(", "),
+                                    "environment_field": environment_field.split(", ")
+                                }
+                        }
+                    }])
+                    config = {"configurable": {"thread_id": st.session_state.thread_id}}
+                    st.session_state.current_state = st.session_state.app.invoke(
+                        resume_command,
+                        config=config
                     )
-                    st.session_state.result = result
-                    st.session_state.step = 3
+                    st.rerun()
         
         with col2:
-            if st.button("❌ Reject Keywords"):
-                with st.spinner("Processing..."):
-                    example3 = Command(resume=[{"type": "reject"}])
-                    result = run_patent_search(
-                        patent_description=patent_description,
-                        max_results=max_results,
-                        model_name=model_name
+            if st.button("Reject Keywords ❎"):
+                with st.spinner("Regenerating keywords..."):
+                    st.session_state.cancel_event = False
+                    resume_command = Command(resume=[{
+                            "type": "reject",
+                        }])
+                    config = {"configurable": {"thread_id": st.session_state.thread_id}}
+                    st.session_state.current_state = st.session_state.app.invoke(
+                        resume_command,
+                        config=config
                     )
-                    st.session_state.result = result
-                    display_keywords(result.get('seed_keywords'))
-    
-    # Display final results
-    if st.session_state.step == 3 and st.session_state.result:
-        display_final_results(st.session_state.result)
-
-def display_keywords(keywords):
-    if not keywords:
-        return
-    
-    st.subheader("Generated Keywords")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.write("Problem/Purpose:")
-        for kw in keywords.get('problem_purpose', []):
-            st.write(f"- {kw}")
-            
-    with col2:
-        st.write("Object/System:")
+                    st.rerun()
+        with col3:
+            if st.button("Cancel Workflow ❌"):
+                with st.spinner("Canceling Workflow..."):
+                    st.session_state.cancel_event = True
+                    st.rerun()        st.write("Object/System:")
         for kw in keywords.get('object_system', []):
             st.write(f"- {kw}")
             
